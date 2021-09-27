@@ -116,32 +116,11 @@ func buildOptions(opt *proto.CompressRequest) *ffmpeg.Options {
 	}
 	if opt.Bitrate != 0 {
 		bufSize := int(opt.Bitrate)
-		bStr := bitrateStr(opt.Bitrate, 0)
+		bStr := fmt.Sprintf("%d", opt.Bitrate)
 		opts.BufferSize = &bufSize
 		opts.VideoBitRate = &bStr
 	}
 	return &opts
-}
-
-// bitrateStr uses to get string representation for bitrate.
-// Example: input 640000, output: 64k
-func bitrateStr(bitrate int32, step int) string {
-	if bitrate%1000 == 0 {
-		nBitrate := bitrate / 1000
-		step++
-		return bitrateStr(nBitrate, step)
-	} else {
-		var bitrateLetter string
-		switch step {
-		case 1:
-			bitrateLetter = "k"
-		case 2:
-			bitrateLetter = "m"
-		case 3:
-			bitrateLetter = "g"
-		}
-		return fmt.Sprintf("%d%s", bitrate, bitrateLetter)
-	}
 }
 
 func videoBitrate(videoPath string, ffmpegCnf *ffmpeg.Config) (int, error) {
@@ -180,7 +159,7 @@ func findBestBitrate(expectedBitrate int, bitrateVersions map[int]int) (int, err
 		if difference < 0 {
 			difference *= -1
 		}
-		if difference == -1 || difference < bestDifference {
+		if bestIndex == -1 || difference < bestDifference {
 			bestIndex = k
 			bestDifference = difference
 		}
