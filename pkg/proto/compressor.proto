@@ -14,10 +14,8 @@ message CompressResponse {
 
 message CompressRequest {
   int32 bitrate = 1;
-  int32 resolutionX = 2;
-  int32 resolutionY = 3;
-  int32 ratioX = 4;
-  int32 ratioY = 5;
-  string video_id = 6;
-  string video_service_id = 7;
+  string resolution = 3;
+  string ratio = 4;
+  string video_id = 5;
+  string video_service_id = 6;
 }
