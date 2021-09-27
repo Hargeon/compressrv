@@ -14,7 +14,6 @@ type LocalStorage struct {
 
 // VideoById returns video from local machine
 func (s *LocalStorage) VideoById(id string) (string, error) {
-	fmt.Println("Get video from storage")
 	root := os.Getenv("ROOT")
 	videoPath := root + fmt.Sprintf("/tmp/original_video/%s", id)
 	_, err := os.Open(videoPath)
