@@ -1,7 +1,6 @@
 package compressor
 
 import (
-	"errors"
 	"fmt"
 	"github.com/Hargeon/compressrv/pkg/proto"
 	"github.com/floostack/transcoder/ffmpeg"
@@ -10,8 +9,10 @@ import (
 	"strings"
 )
 
-const maxRetryCount = 20
 const convertedVideosPath = "/tmp/converted_video"
+const bitrateAccuracy = 1000
+const decreaseBitrate = 0.6
+const increaseBitrate = 2
 
 // Compressor ...
 type Compressor struct{}
@@ -46,8 +47,6 @@ func (c *Compressor) Convert(opt *proto.CompressRequest, originalVideo string) (
 
 // convertWithBitrate uses for changing bitrate on video file.
 func convertWithBitrate(originalVideo string, opts *ffmpeg.Options, ffmpegCnf *ffmpeg.Config) (string, error) {
-	successStep := -1
-	bitrateVersions := make(map[int]int, maxRetryCount)
 	expectedBitrate := *opts.BufferSize
 
 	root := os.Getenv("ROOT")
@@ -58,40 +57,45 @@ func convertWithBitrate(originalVideo string, opts *ffmpeg.Options, ffmpegCnf *f
 
 	// Bitrate and buffer size needs for changing bitrate on video file.
 	// Buffer size changes on each step and creates new video file.
-	for i := 1; i <= maxRetryCount; i++ {
+	for i := 1; ; i++ {
+		previousVideoPath := fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, i-1, newVideoName)
 		newVideoPath = fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, i, newVideoName)
 
 		err := convertVideo(originalVideo, newVideoPath, ffmpegCnf, opts)
 		if err != nil {
-			continue
+			return "", err
 		}
 
 		bitrate, err := videoBitrate(newVideoPath, ffmpegCnf)
 		if err != nil {
-			continue
+			os.Remove(newVideoPath)
+
+			if _, bErr := videoBitrate(previousVideoPath, ffmpegCnf); bErr == nil {
+				newVideoPath = previousVideoPath
+				break
+			} else {
+				return "", err
+			}
 		}
 
-		bitrateVersions[i] = bitrate
-		if bitrate+1000 < expectedBitrate {
-			newRate := *opts.BufferSize * (i + 1)
-			opts.BufferSize = &newRate
-		} else if bitrate-1000 > expectedBitrate {
-			newRate := int(float32(*opts.BufferSize) * 0.8)
-			opts.BufferSize = &newRate
+		os.Remove(previousVideoPath)
+
+		if bitrate <= expectedBitrate {
+			if expectedBitrate-bitrateAccuracy <= bitrate {
+				break
+			} else {
+				newRate := *opts.BufferSize * increaseBitrate
+				opts.BufferSize = &newRate
+			}
 		} else {
-			successStep = i
-			break
+			if expectedBitrate+bitrateAccuracy >= bitrate {
+				break
+			} else {
+				newRate := int(float64(*opts.BufferSize) * decreaseBitrate)
+				opts.BufferSize = &newRate
+			}
 		}
 	}
-	if successStep == -1 {
-		bIndex, err := findBestBitrate(expectedBitrate, bitrateVersions)
-		removeUselessVideos(root, newVideoName, successStep, bIndex)
-		if err == nil {
-			return fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, bIndex, newVideoName), nil
-		}
-		return "", errors.New("can't convert video file")
-	}
-	removeUselessVideos(root, newVideoName, successStep, successStep)
 	return newVideoPath, nil
 }
 
@@ -132,47 +136,4 @@ func videoBitrate(videoPath string, ffmpegCnf *ffmpeg.Config) (int, error) {
 
 	bStr := metaData.GetFormat().GetBitRate()
 	return strconv.Atoi(bStr)
-}
-
-// removeUselessVideos tmp/converted_video/v{#index}_#{name}
-func removeUselessVideos(root, videoName string, lastIndex, escapeIndex int) {
-	var lastFileIndex int
-	if lastIndex == -1 {
-		lastFileIndex = maxRetryCount
-	} else {
-		lastFileIndex = lastIndex
-	}
-	for i := 1; i <= lastFileIndex; i++ {
-		if i == escapeIndex {
-			continue
-		}
-		path := fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, i, videoName)
-
-		_, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-
-		os.Remove(path)
-	}
-}
-
-func findBestBitrate(expectedBitrate int, bitrateVersions map[int]int) (int, error) {
-	bestIndex := -1
-	bestDifference := -1
-	var difference int
-	for k, v := range bitrateVersions {
-		difference = expectedBitrate - v
-		if difference < 0 {
-			difference *= -1
-		}
-		if bestIndex == -1 || difference < bestDifference {
-			bestIndex = k
-			bestDifference = difference
-		}
-	}
-	if bestIndex == -1 {
-		return bestIndex, errors.New("something went wrong while converting video")
-	}
-	return bestIndex, nil
 }
