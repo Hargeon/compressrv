@@ -11,6 +11,7 @@ import (
 )
 
 const maxRetryCount = 20
+const convertedVideosPath = "/tmp/converted_video"
 
 // Compressor ...
 type Compressor struct{}
@@ -35,7 +36,7 @@ func (c *Compressor) Convert(opt *proto.CompressRequest, originalVideo string) (
 	iName := strings.LastIndex(originalVideo, "/")
 
 	newVideoName := originalVideo[iName:]
-	newVideoPath := fmt.Sprintf("%s/tmp/converted_video%s", root, newVideoName)
+	newVideoPath := fmt.Sprintf("%s%s%s", root, convertedVideosPath, newVideoName)
 	err := convertVideo(originalVideo, newVideoPath, ffmpegCnf, opts)
 	if err != nil {
 		return "", err
@@ -58,7 +59,7 @@ func convertWithBitrate(originalVideo string, opts *ffmpeg.Options, ffmpegCnf *f
 	// Bitrate and buffer size needs for changing bitrate on video file.
 	// Buffer size changes on each step and creates new video file.
 	for i := 1; i <= maxRetryCount; i++ {
-		newVideoPath = fmt.Sprintf("%s/tmp/converted_video/v%d_%s", root, i, newVideoName)
+		newVideoPath = fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, i, newVideoName)
 
 		err := convertVideo(originalVideo, newVideoPath, ffmpegCnf, opts)
 		if err != nil {
@@ -84,9 +85,9 @@ func convertWithBitrate(originalVideo string, opts *ffmpeg.Options, ffmpegCnf *f
 	}
 	if successStep == -1 {
 		bIndex, err := findBestBitrate(expectedBitrate, bitrateVersions)
-		removeUselessVideos(root, newVideoName, maxRetryCount, bIndex)
+		removeUselessVideos(root, newVideoName, successStep, bIndex)
 		if err == nil {
-			return fmt.Sprintf("%s/tmp/converted_video/v%d_%s", root, bIndex, newVideoName), nil
+			return fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, bIndex, newVideoName), nil
 		}
 		return "", errors.New("can't convert video file")
 	}
@@ -133,13 +134,19 @@ func videoBitrate(videoPath string, ffmpegCnf *ffmpeg.Config) (int, error) {
 	return strconv.Atoi(bStr)
 }
 
-// removeUselessVideos removes video files which has 'bad' bitrate
+// removeUselessVideos tmp/converted_video/v{#index}_#{name}
 func removeUselessVideos(root, videoName string, lastIndex, escapeIndex int) {
-	for i := 1; i <= lastIndex; i++ {
+	var lastFileIndex int
+	if lastIndex == -1 {
+		lastFileIndex = maxRetryCount
+	} else {
+		lastFileIndex = lastIndex
+	}
+	for i := 1; i <= lastFileIndex; i++ {
 		if i == escapeIndex {
 			continue
 		}
-		path := fmt.Sprintf("%s/tmp/converted_video/v%d_%s", root, i, videoName)
+		path := fmt.Sprintf("%s%s/v%d_%s", root, convertedVideosPath, i, videoName)
 
 		_, err := os.Stat(path)
 		if err != nil {
