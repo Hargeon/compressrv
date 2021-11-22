@@ -1,16 +1,21 @@
 package service
 
 import (
-	"github.com/Hargeon/compressrv/pkg/proto"
+	"context"
+	"io"
+
+	"github.com/Hargeon/compressrv/pkg/response"
 	"github.com/Hargeon/compressrv/pkg/service/compressor"
 )
 
 type VideoStorage interface {
-	VideoById(id string) (string, error)
+	Download(ctx context.Context, id string) (string, error)
+	Upload(ctx context.Context, fileName string, file io.Reader) (string, error)
 }
 
 type Compressor interface {
-	Convert(opt *proto.CompressRequest, video string) (string, error)
+	Convert(ctx context.Context, opt *compressor.Request, originalVideo string) (string, error)
+	VideoInfo(path string) (*response.Video, error)
 }
 
 type Service struct {
@@ -18,9 +23,9 @@ type Service struct {
 	Compressor
 }
 
-func NewService(storage VideoStorage) *Service {
+func NewService(storage VideoStorage, ffmpegPath, ffprobePath string) *Service {
 	return &Service{
 		VideoStorage: storage,
-		Compressor:   compressor.NewCompressor(),
+		Compressor:   compressor.NewCompressor(ffmpegPath, ffprobePath),
 	}
 }

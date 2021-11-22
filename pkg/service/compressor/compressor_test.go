@@ -1,13 +1,14 @@
 package compressor
 
 import (
+	"context"
 	"fmt"
-	"github.com/Hargeon/compressrv/pkg/proto"
+	"os"
+	"testing"
+
 	"github.com/floostack/transcoder/ffmpeg"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
-	"os"
-	"testing"
 )
 
 const originalVideoPath = "/tmp/original_video/"
@@ -19,16 +20,16 @@ func init() {
 	if err != nil {
 		logger.Fatal("Can't read .env file", zap.String("Error", err.Error()))
 	}
-	root := os.Getenv("ROOT")
-	if root == "" {
+
+	if root := os.Getenv("ROOT"); root == "" {
 		logger.Fatal("Invalid ROOT ENV variable")
 	}
-	ffmpegPath := os.Getenv("FFMPEG_PATH")
-	if ffmpegPath == "" {
+
+	if ffmpegPath := os.Getenv("FFMPEG_PATH"); ffmpegPath == "" {
 		logger.Fatal("Invalid FFMPEG_PATH ENV variable")
 	}
-	ffprobePath := os.Getenv("FFPROBE_PATH")
-	if ffprobePath == "" {
+
+	if ffprobePath := os.Getenv("FFPROBE_PATH"); ffprobePath == "" {
 		logger.Fatal("Invalid FFMPEG_PATH ENV variable")
 	}
 }
@@ -37,7 +38,7 @@ func TestVideoBitrate(t *testing.T) {
 	cases := []struct {
 		name            string
 		videoName       string
-		expectedBitrate int
+		expectedBitrate int64
 		errorPresent    bool
 	}{
 		{
@@ -60,16 +61,14 @@ func TestVideoBitrate(t *testing.T) {
 		},
 	}
 
+	srv := NewCompressor(os.Getenv("FFMPEG_PATH"), os.Getenv("FFPROBE_PATH"))
+
 	root := os.Getenv("ROOT")
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			path := fmt.Sprintf("%s%s%s", root, originalVideoPath, testCase.videoName)
-			cnf := ffmpeg.Config{
-				FfmpegBinPath:  os.Getenv("FFMPEG_PATH"),
-				FfprobeBinPath: os.Getenv("FFPROBE_PATH"),
-			}
 
-			bitrate, err := videoBitrate(path, &cnf)
+			bitrate, err := srv.videoBitrate(path)
 			if bitrate != testCase.expectedBitrate {
 				t.Errorf("Invalid bitrate, expected: %d, got: %d\n", testCase.expectedBitrate, bitrate)
 			}
@@ -88,7 +87,7 @@ func TestVideoBitrate(t *testing.T) {
 func TestBuildOptions(t *testing.T) {
 	cases := []struct {
 		name string
-		opts *proto.CompressRequest
+		opts *Request
 
 		resolution   string
 		ration       string
@@ -97,7 +96,7 @@ func TestBuildOptions(t *testing.T) {
 	}{
 		{
 			name:         "With ratio",
-			opts:         &proto.CompressRequest{Ratio: "6:4"},
+			opts:         &Request{Ratio: "6:4"},
 			resolution:   "",
 			ration:       "6:4",
 			bufferSize:   0,
@@ -105,7 +104,7 @@ func TestBuildOptions(t *testing.T) {
 		},
 		{
 			name:         "With resolution",
-			opts:         &proto.CompressRequest{Resolution: "700:600"},
+			opts:         &Request{Resolution: "700:600"},
 			resolution:   "700:600",
 			ration:       "",
 			bufferSize:   0,
@@ -113,7 +112,7 @@ func TestBuildOptions(t *testing.T) {
 		},
 		{
 			name:         "With bitrate",
-			opts:         &proto.CompressRequest{Bitrate: 64000},
+			opts:         &Request{Bitrate: 64000},
 			resolution:   "",
 			ration:       "",
 			bufferSize:   64000,
@@ -121,7 +120,7 @@ func TestBuildOptions(t *testing.T) {
 		},
 		{
 			name: "With resolution, ration and bitrate",
-			opts: &proto.CompressRequest{
+			opts: &Request{
 				Bitrate:    100000,
 				Resolution: "400:300",
 				Ratio:      "9:4",
@@ -133,9 +132,11 @@ func TestBuildOptions(t *testing.T) {
 		},
 	}
 
+	srv := NewCompressor(os.Getenv("FFMPEG_PATH"), os.Getenv("FFPROBE_PATH"))
+
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			opts := buildOptions(testCase.opts)
+			opts := srv.buildOptions(testCase.opts)
 
 			if opts.Resolution == nil {
 				if testCase.resolution != "" {
@@ -257,7 +258,9 @@ func TestConvertVideo(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			defer clearConvertedVideosDir()
-			err := convertVideo(originPath, newPath, testCase.ffmpegCnf, testCase.opts)
+
+			srv := &Compressor{ffmpegCnf: testCase.ffmpegCnf}
+			err := srv.convertVideo(originPath, newPath, testCase.opts)
 			if err == nil && testCase.errorPresent {
 				t.Errorf("Should be error\n")
 			}
@@ -269,6 +272,7 @@ func TestConvertVideo(t *testing.T) {
 				metaData, err := ffmpeg.New(ffmpegCnf).Input(newPath).GetMetadata()
 				if err != nil {
 					t.Errorf("Unexpected error while check video metadata, error: %s\n", err)
+
 					return
 				}
 				streams := metaData.GetStreams()
@@ -298,7 +302,7 @@ func TestConvertWithBitrate(t *testing.T) {
 		opts          *ffmpeg.Options
 		ffmpegCnf     *ffmpeg.Config
 
-		expectedBitrate int
+		expectedBitrate int64
 		filePresent     bool
 		errorPresent    bool
 	}{
@@ -384,8 +388,10 @@ func TestConvertWithBitrate(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			defer clearConvertedVideosDir()
+
+			srv := &Compressor{ffmpegCnf: testCase.ffmpegCnf}
 			originVideoPath := fmt.Sprintf("%s%s%s", root, originalVideoPath, testCase.originalVideo)
-			path, err := convertWithBitrate(originVideoPath, testCase.opts, testCase.ffmpegCnf)
+			path, err := srv.convertWithBitrate(originVideoPath, testCase.opts)
 			if err != nil && !testCase.errorPresent {
 				t.Errorf("Unexpected error, error: %s\n", err)
 			}
@@ -400,9 +406,10 @@ func TestConvertWithBitrate(t *testing.T) {
 			}
 
 			if path != "" {
-				bitrate, err := videoBitrate(path, ffmpegCnf)
+				bitrate, err := srv.videoBitrate(path)
 				if err != nil {
 					t.Errorf("Unexpected error while checking video bitrate, err: %s\n", err)
+
 					return
 				}
 				if bitrate+bitrateAccuracy < testCase.expectedBitrate || bitrate-bitrateAccuracy > testCase.expectedBitrate {
@@ -418,17 +425,24 @@ func clearConvertedVideosDir() {
 	logger := zap.NewExample()
 	dirPath := fmt.Sprintf("%s%s/", root, convertedVideosPath)
 	dir, err := os.Open(dirPath)
+
 	if err != nil {
 		logger.Fatal("Can't open dir", zap.String("Error", err.Error()))
+
+		return
 	}
+
 	files, _ := dir.ReadDir(0)
+
 	for _, file := range files {
 		fileName := file.Name()
 		if fileName == ".keep" {
 			continue
 		}
+
 		path := fmt.Sprintf("%s%s/%s", root, convertedVideosPath, fileName)
 		err := os.Remove(path)
+
 		if err != nil {
 			logger.Fatal("Can't remove file", zap.String("Error", err.Error()))
 		}
@@ -439,38 +453,38 @@ func TestConvert(t *testing.T) {
 	root := os.Getenv("ROOT")
 	cases := []struct {
 		name          string
-		opt           *proto.CompressRequest
+		opt           *Request
 		originalVideo string
 
 		errorPresent       bool
-		expectedBitrate    int
-		expectedRation     string
+		expectedBitrate    int64
+		expectedRatio      string
 		expectedResolution string
 	}{
 		{
 			name:               "Change resolution test_video.mkv",
-			opt:                &proto.CompressRequest{Resolution: "800:600"},
+			opt:                &Request{Resolution: "800:600"},
 			originalVideo:      fmt.Sprintf("%s%stest_video.mkv", root, originalVideoPath),
 			errorPresent:       false,
 			expectedResolution: "800:600",
 		},
 		{
-			name:           "Change ration test_video.mkv",
-			opt:            &proto.CompressRequest{Ratio: "4:3"},
-			originalVideo:  fmt.Sprintf("%s%stest_video.mkv", root, originalVideoPath),
-			errorPresent:   false,
-			expectedRation: "4:3",
+			name:          "Change ration test_video.mkv",
+			opt:           &Request{Ratio: "4:3"},
+			originalVideo: fmt.Sprintf("%s%stest_video.mkv", root, originalVideoPath),
+			errorPresent:  false,
+			expectedRatio: "4:3",
 		},
 		{
 			name:            "Change bitrate test_video.mkv",
-			opt:             &proto.CompressRequest{Bitrate: 50000},
+			opt:             &Request{Bitrate: 50000},
 			originalVideo:   fmt.Sprintf("%s%stest_video.mkv", root, originalVideoPath),
 			errorPresent:    false,
 			expectedBitrate: 50000,
 		},
 		{
 			name: "Change bitrate, resolution and ratio test_video.mkv",
-			opt: &proto.CompressRequest{
+			opt: &Request{
 				Bitrate:    60000,
 				Resolution: "600:300",
 				Ratio:      "9:6",
@@ -478,7 +492,7 @@ func TestConvert(t *testing.T) {
 			originalVideo:      fmt.Sprintf("%s%stest_video.mkv", root, originalVideoPath),
 			errorPresent:       false,
 			expectedBitrate:    60000,
-			expectedRation:     "3:2",
+			expectedRatio:      "3:2",
 			expectedResolution: "600:300",
 		},
 	}
@@ -486,8 +500,8 @@ func TestConvert(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			defer clearConvertedVideosDir()
-			service := NewCompressor()
-			path, err := service.Convert(testCase.opt, testCase.originalVideo)
+			service := NewCompressor(os.Getenv("FFMPEG_PATH"), os.Getenv("FFPROBE_PATH"))
+			path, err := service.Convert(context.Background(), testCase.opt, testCase.originalVideo)
 			if err != nil && !testCase.errorPresent {
 				t.Errorf("Unexpected error, error: %s\n", err)
 			}
@@ -495,7 +509,7 @@ func TestConvert(t *testing.T) {
 				t.Errorf("Should be error\n")
 			}
 
-			filePresent := testCase.expectedResolution != "" || testCase.expectedRation != "" || testCase.expectedBitrate != 0
+			filePresent := testCase.expectedResolution != "" || testCase.expectedRatio != "" || testCase.expectedBitrate != 0
 			if filePresent && path == "" {
 				t.Errorf("File should be created\n")
 			}
@@ -511,7 +525,7 @@ func TestConvert(t *testing.T) {
 				}
 
 				if testCase.expectedBitrate != 0 {
-					bitrate, err := videoBitrate(path, ffmpegCnf)
+					bitrate, err := service.videoBitrate(path)
 					if err != nil {
 						t.Errorf("Unexpected error while checking video bitrate, error: %s\n", err)
 					}
@@ -523,6 +537,7 @@ func TestConvert(t *testing.T) {
 				metaData, err := ffmpeg.New(ffmpegCnf).Input(path).GetMetadata()
 				if err != nil {
 					t.Errorf("Unexpected error while check video metadata, error: %s\n", err)
+
 					return
 				}
 				streams := metaData.GetStreams()
@@ -534,10 +549,10 @@ func TestConvert(t *testing.T) {
 					}
 				}
 
-				if testCase.expectedRation != "" {
+				if testCase.expectedRatio != "" {
 					ratio := streams[0].GetDisplayAspectRatio()
-					if ratio != testCase.expectedRation {
-						t.Errorf("Invalid ration, expected: %s, got: %s\n", testCase.expectedRation, ratio)
+					if ratio != testCase.expectedRatio {
+						t.Errorf("Invalid ration, expected: %s, got: %s\n", testCase.expectedRatio, ratio)
 					}
 				}
 			}
