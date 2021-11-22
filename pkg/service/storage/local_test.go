@@ -1,12 +1,14 @@
 package storage
 
 import (
+	"context"
 	"fmt"
-	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/joho/godotenv"
 )
 
 func init() {
@@ -19,45 +21,13 @@ func init() {
 	if err != nil {
 		logger.Fatal("Can't read .env file", zap.String("Error", err.Error()))
 	}
-	root := os.Getenv("ROOT")
-	if root == "" {
+
+	if root := os.Getenv("ROOT"); root == "" {
 		logger.Fatal("Invalid ROOT ENV variable")
 	}
 }
 
-func TestNewLocalStorage(t *testing.T) {
-	logger := zap.NewExample()
-	cases := []struct {
-		name          string
-		logger        *zap.Logger
-		loggerPresent bool
-	}{
-		{
-			name:          "With logger",
-			logger:        logger,
-			loggerPresent: true,
-		},
-		{
-			name:          "Without logger",
-			logger:        nil,
-			loggerPresent: false,
-		},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			storage := NewLocalStorage(testCase.logger)
-			if testCase.loggerPresent && storage.logger == nil {
-				t.Errorf("Logger should be present")
-			}
-			if !testCase.loggerPresent && storage.logger != nil {
-				t.Errorf("Logger should be nil")
-			}
-		})
-	}
-}
-
-func TestVideoById(t *testing.T) {
+func TestDownload(t *testing.T) {
 	root := os.Getenv("ROOT")
 	cases := []struct {
 		name       string
@@ -83,7 +53,7 @@ func TestVideoById(t *testing.T) {
 	storage := NewLocalStorage(logger)
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			path, err := storage.VideoById(testCase.input)
+			path, err := storage.Download(context.Background(), testCase.input)
 			if err != nil && !testCase.errorExist {
 				t.Errorf("Unexpected error: %v\n", err)
 			}

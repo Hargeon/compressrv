@@ -2,9 +2,11 @@
 package storage
 
 import (
+	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"os"
+
+	"go.uber.org/zap"
 )
 
 // LocalStorage used for local storage
@@ -12,15 +14,17 @@ type LocalStorage struct {
 	logger *zap.Logger
 }
 
-// VideoById returns video from local machine
-func (s *LocalStorage) VideoById(id string) (string, error) {
+// Download function returns video from local machine
+func (s *LocalStorage) Download(ctx context.Context, id string) (string, error) {
 	root := os.Getenv("ROOT")
 	videoPath := root + fmt.Sprintf("/tmp/original_video/%s", id)
-	_, err := os.Open(videoPath)
-	if err != nil {
+
+	if _, err := os.Open(videoPath); err != nil {
 		s.logger.Error("Can't find video by id", zap.String("Error", err.Error()))
+
 		return "", err
 	}
+
 	return videoPath, nil
 }
 
