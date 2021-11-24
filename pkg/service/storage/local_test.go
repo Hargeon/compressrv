@@ -3,12 +3,12 @@ package storage
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"log"
 	"os"
 	"testing"
 
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func init() {
