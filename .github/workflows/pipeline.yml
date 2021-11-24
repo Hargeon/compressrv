@@ -17,9 +17,15 @@ jobs:
           sudo apt update
           sudo apt install ffmpeg
           go get -u golang.org/x/tools/cmd/goimports
-      - name: Lint
-        run: |
-          goimports -l -d .
-          gofmt -l -d .
+      - name: goimports
+        run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l . | tee goimports.out)" || { cat goimports.out && exit 1; }
+      - name: Open this to see how to fix goimports if it fails
+        run: echo Run goimports -w .
+        if: failure()
+      - name: gofmt
+        run: test -z "$(set -o pipefail && gofmt -l . | tee gofmt.out)" || { cat gofmt.out && exit 1; }
+      - name: Open this to see how to fix gofmt if it fails
+        run: echo Run gofmt -w .
+        if: failure()
       - name: Run Unit Tests
         run: go test -v ./...
