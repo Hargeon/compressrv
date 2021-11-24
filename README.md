@@ -1,4 +1,16 @@
-# compressrv - compress service
+# compressrv
+
+## Description
+The service compresses video by changing the
+bitrate, resolution and ratio
+
+## FFMPEG
+
+### Linux
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
 
 ## Testing
 
