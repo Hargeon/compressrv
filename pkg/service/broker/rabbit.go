@@ -2,8 +2,6 @@
 package broker
 
 import (
-	"fmt"
-
 	"github.com/streadway/amqp"
 )
 
@@ -13,27 +11,19 @@ type Rabbit struct {
 	ch   *amqp.Channel
 	q    amqp.Queue
 
-	user     string
-	password string
-	host     string
-	port     string
+	url string
 }
 
 // NewRabbit initialize Rabbit
-func NewRabbit(user, password, host, port string) *Rabbit {
+func NewRabbit(url string) *Rabbit {
 	return &Rabbit{
-		user:     user,
-		password: password,
-		host:     host,
-		port:     port,
+		url: url,
 	}
 }
 
 // Connect to rabbit, create chan, declare queue
 func (r *Rabbit) Connect(queueName string) (*amqp.Connection, error) {
-	rabbitDsn := fmt.Sprintf("amqp://%s:%s@%s:%s/",
-		r.user, r.password, r.host, r.port)
-	conn, err := amqp.Dial(rabbitDsn)
+	conn, err := amqp.Dial(r.url)
 
 	if err != nil {
 		return nil, err

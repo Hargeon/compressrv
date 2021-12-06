@@ -32,9 +32,7 @@ func main() {
 	}
 
 	// init Rabbit publisher
-	publisher := broker.NewRabbit(os.Getenv("RABBIT_USER"),
-		os.Getenv("RABBIT_PASSWORD"), os.Getenv("RABBIT_HOST"),
-		os.Getenv("RABBIT_PORT"))
+	publisher := broker.NewRabbit(os.Getenv("RABBIT_URL"))
 
 	publisherConn, err := publisher.Connect("video_update_test")
 	if err != nil {
@@ -43,9 +41,7 @@ func main() {
 	defer publisherConn.Close()
 
 	// init Rabbit consumer
-	consumer := broker.NewRabbit(os.Getenv("RABBIT_USER"),
-		os.Getenv("RABBIT_PASSWORD"), os.Getenv("RABBIT_HOST"),
-		os.Getenv("RABBIT_PORT"))
+	consumer := broker.NewRabbit(os.Getenv("RABBIT_URL"))
 
 	consumerConn, err := consumer.Connect("video_convert_test")
 	if err != nil {
