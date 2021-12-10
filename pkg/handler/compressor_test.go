@@ -156,6 +156,7 @@ func TestCompress(t *testing.T) {
 				VideoStorage: &errorCloud{},
 			},
 			req: &compressor.Request{
+				UserID:         1,
 				RequestID:      1,
 				Bitrate:        64000,
 				Resolution:     "800:600",
@@ -175,6 +176,7 @@ func TestCompress(t *testing.T) {
 				Compressor:   &errorCompressService{},
 			},
 			req: &compressor.Request{
+				UserID:         1,
 				RequestID:      1,
 				Bitrate:        64000,
 				Resolution:     "800:600",
@@ -194,6 +196,7 @@ func TestCompress(t *testing.T) {
 				Compressor:   &successCompressService{},
 			},
 			req: &compressor.Request{
+				UserID:         1,
 				RequestID:      1,
 				Bitrate:        64000,
 				Resolution:     "800:600",
@@ -217,6 +220,7 @@ func TestCompress(t *testing.T) {
 					ServiceID: "temp_converted_file.mkv",
 					Size:      3595197,
 					Name:      "temp_converted_file.mkv",
+					UserID:    1,
 					Video: response.Video{
 						Bitrate:     64000,
 						ResolutionX: 800,

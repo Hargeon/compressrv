@@ -21,6 +21,7 @@ type ConvertedVideo struct {
 	ServiceID string `json:"service_id"`
 	Size      int64  `json:"size"`
 	Name      string `json:"name"`
+	UserID    int64  `json:"user_id"`
 	Video
 }
 

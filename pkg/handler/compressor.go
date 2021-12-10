@@ -106,6 +106,7 @@ func (h *CompressorHandler) Compress(ctx context.Context, req *compressor.Reques
 		ServiceID: id,
 		Video:     *fileInfo,
 		Name:      id,
+		UserID:    req.UserID,
 	}
 
 	stat, err := convertedVideo.Stat()

@@ -91,6 +91,8 @@ func main() {
 				logger.Error("publish response", zap.String("Error", err.Error()))
 			}
 
+			logger.Info("Worker finish", zap.String("Body", string(body)))
+
 			finishMsg(d)
 		}
 	}()

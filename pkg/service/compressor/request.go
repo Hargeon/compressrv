@@ -7,5 +7,6 @@ type Request struct {
 	Resolution     string `json:"resolution"`
 	Ratio          string `json:"ratio"`
 	VideoID        int64  `json:"video_id"`
+	UserID         int64  `json:"user_id"`
 	VideoServiceID string `json:"video_service_id"`
 }
